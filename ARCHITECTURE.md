@@ -20,7 +20,7 @@ flowchart TB
         direction LR
         D["Public lip datasets<br/>GRID · LRW · OuluVS2 · MIRACL-VC1<br/>+ our own phone recordings"]
         X["MediaPipe<br/>video → 40 lip dots per frame"]
-        T["Train tiny lip encoder<br/>PyTorch, CPU only"]
+        T["Train tiny lip encoder<br/>TensorFlow/Keras, CPU only"]
         E["Export to LiteRT<br/>int8, under 1 MB"]
         D --> X --> T --> E
     end
@@ -81,7 +81,7 @@ Speed rules: camera, MediaPipe and TTS start when the app opens (no cold start o
 | Face dots | **MediaPipe Face Landmarker** (`tasks-vision`) | Free, on-device, ~3.7 MB model, same tool in training and app so dots match exactly |
 | Lip model | **1D temporal CNN** on lip dots, ~350k params, 64-d output | Dots instead of pixels = ~100× less input. Conv layers quantize cleanly to int8 (GRUs don't) |
 | On-phone runtime | **LiteRT** (TensorFlow Lite), int8 | Small, fast on CPU, works on every Android phone |
-| Training | **Python 3.11, PyTorch (CPU), MediaPipe**, export with **litert-torch** | Model is tiny → CPU is enough; litert-torch converts PyTorch → `.tflite` directly |
+| Training | **Python 3.11, TensorFlow/Keras (CPU), MediaPipe** | Model is tiny → CPU is enough; Keras has the LiteRT (`.tflite`) converter and int8 quantization built in — one framework from training to phone |
 | Personalisation | **Nearest-fingerprint matching** (prototypes) | Teaching = storing vectors, not training. Zero extra battery, instant |
 | Agent / actions | **Deterministic router** (`phrases.json`) + **Android intents** | Closed phrase set → the phrase *is* the intent. No LLM needed for the core |
 | Speak aloud | **Android TextToSpeech** | Built in, offline voices |
@@ -142,6 +142,7 @@ Rough cost: extracting dots from LRW ≈ 14M frames ≈ 5 h on 12 CPU cores. Tra
 | **Flutter / React Native** | Extra runtime (several MB), per-frame camera data crossing a bridge. iOS is a stretch goal; we pay for it if/when it comes |
 | **GRU/LSTM model** | int8 quantization of recurrent layers is patchy in LiteRT; 1D-CNN is faster and quantizes cleanly |
 | **Training on the phone for personalisation** | Complex, slow, battery-heavy. Saving fingerprints gives the same "teach a phrase" UX for free |
+| **PyTorch + litert-torch** | Converter pulls in JAX + TensorFlow anyway: first Docker image was 3.8 GB for a <1 MB model. Keras exports to LiteRT natively |
 | **ONNX Runtime Mobile** | Works, but LiteRT is smaller on Android and shares Google's tooling with MediaPipe |
 | **Eyebrow-raise trigger** | Cute but error-prone. Push-to-talk first; add later if users ask |
 | **A database (Room/SQLite)** | We store a few KB of vectors. One JSON file |
