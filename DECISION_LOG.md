@@ -1,0 +1,37 @@
+# Decision Log
+
+Every project decision, newest at the bottom. Each entry: what we chose, why, what we rejected.
+Never edit an old entry — if a decision changes, add a new one that says "Supersedes D-xx".
+
+| ID | Date | Decision | Why | Rejected |
+|---|---|---|---|---|
+| D-01 | 2026-10-01 | **Model input = 40 MediaPipe lip landmarks, not video pixels** | ~100× smaller input → model under 1 MB, runs on 2 GB phones. Same MediaPipe in training and app, so inputs match | Pixel models (Auto-AVSR): 100M+ params, need GPU |
+| D-02 | 2026-10-01 | **v1 is a closed set of 30–50 phrases, personalised to the owner** | Free-sentence lip reading is ~20% WER even for research models; closed set is reachable on a cheap phone and removes look-alike letter errors | Open-vocabulary dictation on device |
+| D-03 | 2026-10-01 | **Personalise by saving fingerprints (prototype matching), no on-phone training** | Teaching a phrase = storing vectors. Instant, no battery cost, works offline | On-device backprop / fine-tuning |
+| D-04 | 2026-10-01 | **"None of these" = distance threshold, user-tunable** | Rejects chewing/smiling without a trained junk class. Threshold is a calibration knob because real phones/faces differ | Dedicated "none" class trained on junk clips |
+| D-05 | 2026-10-01 | **Lip encoder = 1D temporal CNN, ~350k params, 64-d output, int8** | Fast, quantizes cleanly to int8 in LiteRT | GRU/LSTM (patchy int8 support), Transformers (too big) |
+| D-06 | 2026-10-01 | **On-phone runtime = LiteRT; export with litert-torch** | Smallest on Android, same Google tooling as MediaPipe; litert-torch converts PyTorch directly | ONNX Runtime Mobile |
+| D-07 | 2026-10-01 | **App = native Kotlin + CameraX, minSdk 24** | No extra runtime; MediaPipe Tasks requires API 24+ | Flutter / React Native (iOS deferred) |
+| D-08 | 2026-10-01 | **No LLM in the core loop; deterministic router via `phrases.json`** | With a closed set the phrase is the intent. Avoids 500 MB+ on-device LLM or mandatory internet | On-device LLM agent; cloud LLM for word correction |
+| D-09 | 2026-10-01 | **Cloud LLM only for opt-in "Ask AI", text only** | Only feature that truly needs world knowledge; video never leaves the phone | Cloud inference of lip model |
+| D-10 | 2026-10-01 | **Every action needs confirm (tap or nod); nod detected from the same face landmarks** | Guarantees zero wrong actions; nod costs no extra model | Auto-execute on high confidence |
+| D-11 | 2026-10-01 | **Push-to-talk trigger** | Simple, reliable, respects Android camera-in-background limits | Eyebrow-raise trigger (later, if asked) |
+| D-12 | 2026-10-01 | **Contacts bound at teaching time ("call Dad" is one phrase)** | Keeps v1 closed-set | Contact-name slot recognition (v2) |
+| D-13 | 2026-10-01 | **Datasets: GRID first, LRW main pretraining, OuluVS2 + MIRACL-VC1 for phrases, own phone recordings for real conditions** | GRID is instant and CC BY 4.0; LRW gives speaker variety but needs a BBC agreement (apply now, don't block on it); own data matches the real camera/lighting | LRS2 (overlaps LRW), VoxCeleb2/AVSpeech (no labels), LRS3 (only for future sentence mode) |
+| D-14 | 2026-10-01 | **Build a DTW template-matching baseline before the neural encoder** | Zero training, works day 1; the encoder must beat it to justify itself | Going straight to deep learning |
+| D-15 | 2026-10-01 | **Training on CPU, no GPU** | ~350k-param model on landmark sequences trains in minutes–an hour on CPU; landmark extraction is CPU-bound anyway | GPU/CUDA image (multi-GB, unnecessary) |
+| D-16 | 2026-10-01 | **One Dockerfile, two targets (`train`, `android`); source mounted, not copied** | One file to maintain; code changes don't need image rebuilds | docker-compose, separate Dockerfiles per part |
+| D-17 | 2026-10-01 | **Storage = one JSON file in app-private storage** | A few KB of vectors | Room/SQLite |
+| D-18 | 2026-10-01 | **Free-question "Ask AI" demo uses a taught phrase; free sentence mode deferred** | Honest consequence of D-02; keeps everything on-device | Server-side Auto-AVSR for the prototype |
+| D-19 | 2026-10-01 | **Architecture diagram lives in Lucidchart (native shapes) + PNG and Mermaid copies in the repo** | Lucid for editing/presenting; PNG + Mermaid so the repo is readable offline and on GitHub | Mermaid import into Lucid (renders as a code block, not editable shapes) |
+| D-20 | 2026-10-01 | **No system ffmpeg in the train image** | MediaPipe's OpenCV wheel already decodes video; apt ffmpeg added hundreds of MB | apt `ffmpeg` |
+| D-21 | 2026-10-01 | **Pre-warm camera, MediaPipe and TextToSpeech when the app opens** | Each has a 0.5–2 s cold start; paying it on button press would dominate latency | Lazy init on first use |
+| D-22 | 2026-10-01 | **Landmarks computed while the user mouths (streaming); button release = end of utterance** | Only ~50–100 ms of work remains after release; no silence-wait | Auto end-of-speech detection (+300–500 ms) |
+| D-23 | 2026-10-01 | **Prototype uses direct action APIs (`SmsManager`, `ACTION_CALL`, `AlarmClock` with skip-UI)** | Saves 1–2 s vs opening another app and pressing send again. Ceiling: Play Store restricts `SEND_SMS` to default SMS apps, so revisit before a store launch | Share/dial intents that open other apps |
+| D-24 | 2026-10-01 | **Supersedes D-10: speak-aloud and timers run without confirm (one-tap stop/undo shown); messages, calls, Emergency still always confirm** | Confirm is ~80% of end-to-end delay; for speak-aloud (patients) speed matters most and a wrong phrase is harmless and stoppable. Approved by user | Confirm on every action (too slow for speak-aloud); skipping confirm for anything that leaves the phone |
+| D-25 | 2026-10-01 | **UI = 6 screens: Home, Listening, Confirm, Instant, Phrases, Teach** (mockup: https://claude.ai/artifact/GwBY2AnR9SziDJBwSL2ReR) | Covers the whole loop and nothing else; the user spends 95% of the time on Home | Onboarding wizard, history and settings screens beyond one sensitivity slider (later) |
+| D-26 | 2026-10-01 | **Dark, camera-first look; Atkinson Hyperlegible font; one accent; buttons at least 48 px tall** | Dark saves battery on OLED; the font was designed for low vision (patients, older users); big targets help weak hands | Light theme, system default font |
+| D-27 | 2026-10-01 | **Confirm screen shows the 2nd and 3rd guesses as one-tap chips** | Fixing a misread takes one tap (~0.5 s) instead of mouthing it again (~2–3 s); costs nothing because matching already ranks every phrase | Just Yes/No |
+| D-28 | 2026-10-01 | **Jetpack Compose for the UI, with R8 and a baseline profile** | Fastest to build 6 screens before 31 Oct; the baseline profile reduces cold-start jank on low-end phones. Ceiling: ~2 MB more APK than Views | XML Views (smaller, slower to build) |
+| D-29 | 2026-10-01 | **Docker setup postponed; develop natively until the disk has room** | First build of the `train` image came out at 3.8 GB (+3.6 GB build cache) and filled the laptop's disk. Dockerfile stays in the repo, unbuilt | Keep building Docker images now |
+| D-30 | 2026-10-01 | **Pending: replace PyTorch + litert-torch with TensorFlow/Keras for training** | `litert-torch` pulls JAX + TensorFlow just to convert a <1 MB model; Keras has the LiteRT converter built in, so one framework and a much smaller image. Phone side unchanged (still LiteRT). To be confirmed with the user before Dockerfile/stack docs change | Keeping PyTorch (two heavy frameworks in one image) |
