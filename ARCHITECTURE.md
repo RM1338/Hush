@@ -30,7 +30,7 @@ flowchart TB
         C["Front camera<br/>CameraX, 640×480"]
         F["MediaPipe Face Landmarker<br/>keep 40 lip dots, straighten head tilt"]
         M["Lip encoder<br/>dots over time → fingerprint"]
-        N{"Closest taught phrase?<br/>too far = 'none'"}
+        N{"Closest taught phrase?<br/>not clearly ahead of the runner-up = 'none'"}
         R["Intent router<br/>phrase → action"]
         K{"You confirm?<br/>tap or nod<br/>(skipped for speak-aloud & timers)"}
         A["Android does it<br/>SMS · call · alarm · speak aloud"]
@@ -54,7 +54,7 @@ Read it top to bottom: **① is done once by us** (training). **② is what happ
 | 1. Hold button | Push-to-talk starts the camera | Phone | — |
 | 2. Face dots | MediaPipe puts 478 points on the face; we keep the 40 lip points, centre them on the mouth, scale by mouth width, undo head tilt | Phone | ~15–30 fps, the heaviest step |
 | 3. Fingerprint | Tiny 1D-CNN reads the dot movement (up to 2 s) and outputs 64 numbers | Phone | ~5 ms, under 1 MB |
-| 4. Match | Compare to the fingerprints saved during setup. Nearest wins; if nothing is close enough → "none of these" (ignores chewing/smiling) | Phone | microseconds |
+| 4. Match | Compare to the fingerprints saved during setup. Nearest wins, but only if it is clearly closer than the second-best phrase (best ÷ second ≤ ratio, user-tunable, D-46); otherwise "none of these" (ignores chewing/smiling) | Phone | microseconds |
 | 5. Route | `phrases.json` says what each phrase does ("call Dad" → dial contact Dad) | Phone | — |
 | 6. Confirm | Messages, calls, Emergency: shows "Call Dad?", tap or nod (nod comes from the same face dots, free). **Speak-aloud and timers skip this** and show "tap to stop/undo" instead | Phone | — |
 | 7. Act | Android intents: SMS, dial, alarm, TextToSpeech | Phone | — |

@@ -21,7 +21,7 @@ Hush is an offline, on-device lip-reading Android app (mouth a taught phrase →
 
 - **Input is landmarks, not pixels:** 40 MediaPipe Face Landmarker lip points per frame, centred on the mouth, scaled by mouth width, with head tilt removed. The *same* pinned `face_landmarker.task` (D-39) and the *same* normalisation must be used in Python training (`training/extract.py`) and in Kotlin on the phone, or the model's inputs won't match. `training/golden_lips.json` (raw MediaPipe lip xy + image size in, expected dots out) must be reproduced by a Kotlin unit test. Dots are `(frames, 40, 2)` float32 with NaN rows where no face was found; left/right mouth corners always land on (∓0.5, 0).
 - **Lip encoder:** a Keras 1D temporal CNN (~350k params) that outputs a 64-d fingerprint, exported as an int8 LiteRT `.tflite` under 1 MB. Training uses **TensorFlow/Keras on CPU**; PyTorch and litert-torch were rejected (D-31). No GRU/LSTM layers, because their int8 quantization is unreliable.
-- **Personalisation never trains on the device.** To teach a phrase, the user mouths it 5–10 times and the cleaned dot sequences (not fingerprints, D-37) are saved to one JSON file in app-private storage (no DB). Fingerprints are recomputed on app start, so swapping the model never forces re-teaching. Matching is nearest-prototype, and a user-tunable distance threshold produces "none of these".
+- **Personalisation never trains on the device.** To teach a phrase, the user mouths it 5–10 times and the cleaned dot sequences (not fingerprints, D-37) are saved to one JSON file in app-private storage (no DB). Fingerprints are recomputed on app start, so swapping the model never forces re-teaching. Matching is nearest-template (DTW now, encoder later). "None of these" = the best phrase isn't clearly ahead of the runner-up (best ÷ second-best distance > a user-tunable ratio, D-46); a plain distance threshold did much worse.
 - **DTW baseline comes first** (D-14). The neural encoder has to beat its accuracy to replace it.
 - **No LLM in the core loop.** A deterministic router in `phrases.json` maps each phrase to an Android action. The cloud LLM is used only for opt-in, text-only "Ask AI". Video never leaves the phone.
 - **Confirm rules (D-24):** messages, calls, and Emergency always need a tap or nod. Speak-aloud and timers skip confirm but show a one-tap stop/undo. The Confirm screen shows the 2nd and 3rd guesses as chips.
@@ -38,7 +38,8 @@ uv venv --python 3.11 .venv && VIRTUAL_ENV=.venv uv pip install -r training/requ
 .venv/bin/python training/extract.py data/miracl/dataset data/dots/miracl   # all clips → .npy (resumable, all cores)
 .venv/bin/python training/extract.py --show <clip> out.png                  # draw dots over frames to eyeball them
 .venv/bin/python training/extract.py --golden <clip> training/golden_lips.json  # reference for the Kotlin port
-.venv/bin/python training/dtw.py       # (Phase 2) DTW baseline accuracy
+.venv/bin/python training/test_dtw.py                                       # self-check for DTW
+.venv/bin/python training/dtw.py data/dots/miracl                            # DTW baseline: accuracy + rejection table (~6 s)
 ```
 
 Data is all git-ignored, and every download goes into its own folder here. Nothing is left in `~/Downloads`, and zips are deleted after unzipping. Only GRID, MIRACL-VC1 and own data are used (LRW and OuluVS2 are not, D-40/D-41).
