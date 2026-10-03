@@ -52,6 +52,11 @@ def dtw_batch(a_list, b_list):
     return end / (ia[:, None] + ib[None, :] + 2)
 
 
+def phrase_distance(d):
+    """A phrase's distance = mean of its 2 nearest takes (one take if only one). +1.2 pts top-1 vs nearest only (D-47)."""
+    return np.sort(d, axis=1)[:, :2].mean(axis=1)
+
+
 def pad(seqs):
     T = max(len(s) for s in seqs)
     out = np.full((len(seqs), T, seqs[0].shape[1]), np.nan, dtype=np.float32)
@@ -89,8 +94,8 @@ def evaluate(data, ratios=(0.6, 0.7, 0.8, 0.9, 1.0), n_unknown=5, seed=0):
             tpl_lab, tst_lab = np.array(tpl_lab), np.array(tst_lab)
             dist = dtw_batch(tst, tpl)  # (tests, templates)
 
-            # closed set: an item's distance = its nearest template
-            per_item = np.stack([dist[:, tpl_lab == n].min(axis=1) for n in names], axis=1)
+            # closed set
+            per_item = np.stack([phrase_distance(dist[:, tpl_lab == n]) for n in names], axis=1)
             rank = np.argsort(per_item, axis=1)
             truth = np.array([names.index(lab) for lab in tst_lab])
             top1 += (rank[:, 0] == truth).sum()

@@ -37,9 +37,10 @@ object Dtw {
 
     data class Guess(val phraseId: String, val distance: Float)
 
-    /** Every taught phrase ranked by its nearest template. */
+    /** Every taught phrase ranked by the mean distance to its 2 nearest takes (D-47, mirrors dtw.phrase_distance). */
     fun rank(clip: List<FloatArray>, templates: Map<String, List<List<FloatArray>>>): List<Guess> =
-        templates.map { (id, takes) -> Guess(id, takes.minOf { distance(clip, it) }) }.sortedBy { it.distance }
+        templates.map { (id, takes) -> Guess(id, takes.map { distance(clip, it) }.sorted().take(2).average().toFloat()) }
+            .sortedBy { it.distance }
 
     /** D-46: accept the best guess only if best ÷ second-best ≤ [ratio]. */
     fun accept(ranked: List<Guess>, ratio: Float): Boolean =

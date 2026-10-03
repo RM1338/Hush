@@ -3,6 +3,7 @@ package com.hush
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -64,7 +65,13 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
         if (clip.size < MIN_FRAMES || phrases.isEmpty()) return null
         val ranked = Dtw.rank(clip, phrases.associate { it.id to it.takes })
         val byId = phrases.associateBy { it.id }
-        if (!Dtw.accept(ranked, ratio)) return Screen.NotSure
+        val accepted = Dtw.accept(ranked, ratio)
+        // One line per attempt, to measure real-world precision: adb logcat -s Hush
+        Log.i("Hush", "recognised ${clip.size} frames, accepted=$accepted ratio=%.2f top3=%s".format(
+            if (ranked.size > 1) ranked[0].distance / ranked[1].distance else 0f,
+            ranked.take(3).joinToString { "${byId.getValue(it.phraseId).text}:%.3f".format(it.distance) },
+        ))
+        if (!accepted) return Screen.NotSure
         val best = byId.getValue(ranked[0].phraseId)
         val others = ranked.drop(1).take(2).map { byId.getValue(it.phraseId) } // D-27 chips
         return if (best.action.needsConfirm) Screen.Confirm(best, others) else Screen.Instant(best)
