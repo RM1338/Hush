@@ -37,6 +37,15 @@ class LipDotsTest {
     }
 
     @Test
+    fun rankIgnoresRestingShape() {
+        // Same movement from a shifted resting mouth (another day, another posture) must still match itself best.
+        val shifted = dots.map { f -> FloatArray(f.size) { k -> f[k] + if (k % 2 == 1) 0.05f else -0.03f } }
+        val other = dots.reversed()
+        assertEquals("same", Dtw.rank(shifted, mapOf("same" to listOf(dots), "other" to listOf(other)))[0].phraseId)
+        assertEquals(0f, Dtw.distance(Dtw.features(shifted), Dtw.features(dots)), 1e-5f)
+    }
+
+    @Test
     fun ratioRule() {
         val g = listOf(Dtw.Guess("a", 1f), Dtw.Guess("b", 2f))
         assertEquals(true, Dtw.accept(g, 0.8f))

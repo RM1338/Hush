@@ -38,9 +38,18 @@ object Dtw {
     data class Guess(val phraseId: String, val distance: Float)
 
     /** Every taught phrase ranked by the mean distance to its 2 nearest takes (D-47, mirrors dtw.phrase_distance). */
-    fun rank(clip: List<FloatArray>, templates: Map<String, List<List<FloatArray>>>): List<Guess> =
-        templates.map { (id, takes) -> Guess(id, takes.map { distance(clip, it) }.sorted().take(2).average().toFloat()) }
+    fun rank(clip: List<FloatArray>, templates: Map<String, List<List<FloatArray>>>): List<Guess> {
+        val c = features(clip)
+        return templates.map { (id, takes) -> Guess(id, takes.map { distance(c, features(it)) }.sorted().take(2).average().toFloat()) }
             .sortedBy { it.distance }
+    }
+
+    /** Mirror of dtw.features: subtract the clip's average mouth shape, keep only the movement (D-49). */
+    fun features(clip: List<FloatArray>): List<FloatArray> {
+        val mean = FloatArray(clip[0].size)
+        clip.forEach { f -> for (k in f.indices) mean[k] += f[k] / clip.size }
+        return clip.map { f -> FloatArray(f.size) { k -> f[k] - mean[k] } }
+    }
 
     /** D-46: accept the best guess only if best ÷ second-best ≤ [ratio]. */
     fun accept(ranked: List<Guess>, ratio: Float): Boolean =

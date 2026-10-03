@@ -27,8 +27,9 @@ def fill_gaps(d):
 
 
 def features(d):
-    """Plain normalised dot positions. Beat mean-removed and velocity variants on MIRACL (D-46)."""
-    return d.astype(np.float32)
+    """Dot positions minus the clip's average mouth shape: keeps the movement, drops posture/session offsets (D-49).
+    Costs ~4 pts on same-session MIRACL but ranked 5/5 live phone clips first vs 1/5 with raw positions."""
+    return (d - d.mean(axis=0)).astype(np.float32)
 
 
 def dtw_batch(a_list, b_list):

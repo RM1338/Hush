@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dtw import evaluate, fill_gaps, load
+from dtw import evaluate, features, fill_gaps, load
 
 ROOT = Path(__file__).resolve().parent.parent
 GRID_DOTS, GRID_ALIGN = ROOT / "data/dots/grid", ROOT / "data/grid/alignments"
@@ -62,7 +62,7 @@ def grid_words():
                 continue
             i0, i1 = max(int(parts[0]) // 1000 - 2, 0), min(int(parts[1]) // 1000 + 2, len(d))  # +-2 frames context
             if i1 - i0 >= 4:
-                clips.append(d[i0:i1].astype(np.float32))
+                clips.append(features(d[i0:i1]))  # same mean-shape removal as matching (D-49)
                 words.append(parts[2])
                 speakers.append(f.parent.name)
     return clips, words, speakers

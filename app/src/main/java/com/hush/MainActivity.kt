@@ -80,6 +80,7 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
     /** D-48: a clip the user explicitly confirmed becomes a new take, so phrases adapt to new days, light and angles. */
     fun learn(phraseId: String, clip: Clip) {
         val p = phrases.firstOrNull { it.id == phraseId } ?: return
+        Log.i("Hush", "confirmed ${p.text}") // with the line above it: live accuracy from the log
         save(p.copy(takes = (p.takes + listOf(clip)).takeLast(MAX_TAKES)))
     }
 
