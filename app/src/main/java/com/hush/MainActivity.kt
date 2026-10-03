@@ -20,9 +20,9 @@ import java.io.File
 
 sealed interface Screen {
     data object Home : Screen
-    data class Confirm(val phrase: Phrase, val others: List<Phrase>) : Screen
+    /** [sure] = passed the ratio rule. Not sure: show the top guesses as equal choices instead of giving up. */
+    data class Confirm(val phrase: Phrase, val others: List<Phrase>, val clip: Clip, val sure: Boolean) : Screen
     data class Instant(val phrase: Phrase) : Screen
-    data object NotSure : Screen
     data object Phrases : Screen
     data object Teach : Screen
     data object Record : Screen
@@ -71,10 +71,16 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
             if (ranked.size > 1) ranked[0].distance / ranked[1].distance else 0f,
             ranked.take(3).joinToString { "${byId.getValue(it.phraseId).text}:%.3f".format(it.distance) },
         ))
-        if (!accepted) return Screen.NotSure
         val best = byId.getValue(ranked[0].phraseId)
         val others = ranked.drop(1).take(2).map { byId.getValue(it.phraseId) } // D-27 chips
-        return if (best.action.needsConfirm) Screen.Confirm(best, others) else Screen.Instant(best)
+        // D-48: unsure (e.g. "call mom" vs "call dad") -> ask, never silently drop. Only a sure instant phrase runs untouched.
+        return if (accepted && !best.action.needsConfirm) Screen.Instant(best) else Screen.Confirm(best, others, clip, accepted)
+    }
+
+    /** D-48: a clip the user explicitly confirmed becomes a new take, so phrases adapt to new days, light and angles. */
+    fun learn(phraseId: String, clip: Clip) {
+        val p = phrases.firstOrNull { it.id == phraseId } ?: return
+        save(p.copy(takes = (p.takes + listOf(clip)).takeLast(MAX_TAKES)))
     }
 
     fun save(p: Phrase) {
@@ -91,6 +97,7 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
     companion object {
         const val MIN_FRAMES = 4
         const val MIN_TAKES = 5
+        const val MAX_TAKES = 15 // oldest takes drop out as confirmed ones come in
     }
 }
 

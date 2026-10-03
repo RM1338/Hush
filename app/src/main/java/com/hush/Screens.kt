@@ -67,7 +67,6 @@ fun HushApp(state: HushState, preview: PreviewView, actions: Actions) {
                 Screen.Home -> Home(state, preview, actions)
                 is Screen.Confirm -> Confirm(state, s, actions)
                 is Screen.Instant -> Instant(state, s.phrase, actions)
-                Screen.NotSure -> NotSure(state)
                 Screen.Phrases -> PhraseList(state)
                 Screen.Teach -> Teach(state, preview)
                 Screen.Record -> Record(state, preview)
@@ -183,6 +182,32 @@ private fun ColumnScope.Home(state: HushState, preview: PreviewView, actions: Ac
 @Composable
 private fun ColumnScope.Confirm(state: HushState, s: Screen.Confirm, actions: Actions) {
     val p = s.phrase
+
+    /** The user picked [o]: learn from the clip (D-48), then act, or ask Yes/No first if [o] leaves the phone. */
+    fun pick(o: Phrase) {
+        if (o.action.needsConfirm) {
+            state.screen = Screen.Confirm(o, emptyList(), s.clip, sure = true)
+        } else {
+            state.learn(o.id, s.clip)
+            actions.run(o)
+            state.screen = Screen.Instant(o)
+        }
+    }
+
+    if (!s.sure) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text("Did you mean…", style = MaterialTheme.typography.displaySmall)
+            Spacer(Modifier.height(24.dp))
+            (listOf(p) + s.others).forEach { o ->
+                OutlinedButton({ pick(o) }, Modifier.fillMaxWidth().padding(top = 10.dp).heightIn(min = 64.dp), shape = RoundedCornerShape(32.dp)) {
+                    Text(o.text, style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }
+        SecondButton("None of these") { state.screen = Screen.Home }
+        return
+    }
+
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
         Text(p.text + "?", style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(8.dp))
@@ -192,18 +217,14 @@ private fun ColumnScope.Confirm(state: HushState, s: Screen.Confirm, actions: Ac
             Text("Or did you mean", style = MaterialTheme.typography.titleMedium)
             s.others.forEach { o ->
                 // D-27: one tap fixes a misread.
-                OutlinedButton(
-                    {
-                        if (o.action.needsConfirm) state.screen = Screen.Confirm(o, listOf(p))
-                        else { actions.run(o); state.screen = Screen.Instant(o) }
-                    },
-                    Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp), shape = RoundedCornerShape(28.dp),
-                ) { Text(o.text, style = MaterialTheme.typography.labelLarge) }
+                OutlinedButton({ pick(o) }, Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp), shape = RoundedCornerShape(28.dp)) {
+                    Text(o.text, style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
     }
     BigButton(
-        "Yes, ${p.action.label.lowercase()}", { actions.run(p); state.screen = Screen.Home },
+        "Yes, ${p.action.label.lowercase()}", { state.learn(p.id, s.clip); actions.run(p); state.screen = Screen.Home },
         if (p.action == Action.EMERGENCY) Emergency else MaterialTheme.colorScheme.primary,
     )
     Spacer(Modifier.height(12.dp))
@@ -222,17 +243,6 @@ private fun ColumnScope.Instant(state: HushState, p: Phrase, actions: Actions) {
     BigButton(if (p.action == Action.SPEAK) "Stop" else "Undo", { actions.stop(p); state.screen = Screen.Home })
     Spacer(Modifier.height(12.dp))
     SecondButton("Done") { state.screen = Screen.Home }
-}
-
-@Composable
-private fun ColumnScope.NotSure(state: HushState) {
-    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-        Text("Didn't catch that", style = MaterialTheme.typography.displaySmall)
-        Spacer(Modifier.height(8.dp))
-        Text("Nothing was a clear match. Try again, facing the camera.", style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    BigButton("Try again", { state.screen = Screen.Home })
 }
 
 @Composable
