@@ -4,6 +4,7 @@ Output: one .npy per clip, float32, shape (frames, 40, 2), NaN rows where no fac
 The phone app must normalise exactly like `normalise()` (checked by the golden file, D-36).
 
   python training/extract.py data/miracl/dataset data/dots/miracl           # every clip under a folder
+  python training/extract.py data/grid/s1 data/dots/grid/s1 400             # only the first 400 clips
   python training/extract.py --show   data/miracl/dataset/F01/phrases/01/01 out.png
   python training/extract.py --golden data/miracl/dataset/F01/phrases/01/01 training/golden_lips.json
 """
@@ -104,10 +105,10 @@ def _work(job):
     return int(np.isnan(lips[:, 0, 0]).sum()), len(lips)
 
 
-def extract_all(root, out_root):
+def extract_all(root, out_root, limit=None):
     root, out_root = Path(root), Path(out_root)
     jobs = []
-    for clip in find_clips(root):
+    for clip in sorted(find_clips(root))[:limit]:
         rel = clip.relative_to(root)
         out = out_root / (rel.with_suffix(".npy") if clip.is_file() else rel.parent / f"{rel.name}.npy")
         if not out.exists():  # resumable
@@ -157,7 +158,7 @@ if __name__ == "__main__":
         show(a[1], a[2])
     elif len(a) == 3 and a[0] == "--golden":
         golden(a[1], a[2])
-    elif len(a) == 2:
-        extract_all(a[0], a[1])
+    elif len(a) in (2, 3):
+        extract_all(a[0], a[1], int(a[2]) if len(a) == 3 else None)
     else:
         sys.exit(__doc__)

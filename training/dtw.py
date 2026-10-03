@@ -78,7 +78,9 @@ def load(root):
     return data, skipped
 
 
-def evaluate(data, ratios=(0.6, 0.7, 0.8, 0.9, 1.0), n_unknown=5, seed=0):
+def evaluate(data, dist_fn=None, ratios=(0.6, 0.7, 0.8, 0.9, 1.0), n_unknown=5, seed=0):
+    """dist_fn(test_clips, template_clips) -> (tests, templates) distances; default DTW. Returns closed-set top-1."""
+    dist_fn = dist_fn or dtw_batch
     rng = np.random.default_rng(seed)
     top1 = top3 = n_closed = 0
     open_ratio, open_correct, open_unknown = [], [], []
@@ -92,7 +94,7 @@ def evaluate(data, ratios=(0.6, 0.7, 0.8, 0.9, 1.0), n_unknown=5, seed=0):
                     (tpl if take in teach_takes else tst).append(x)
                     (tpl_lab if take in teach_takes else tst_lab).append(name)
             tpl_lab, tst_lab = np.array(tpl_lab), np.array(tst_lab)
-            dist = dtw_batch(tst, tpl)  # (tests, templates)
+            dist = dist_fn(tst, tpl)  # (tests, templates)
 
             # closed set
             per_item = np.stack([phrase_distance(dist[:, tpl_lab == n]) for n in names], axis=1)
@@ -117,6 +119,7 @@ def evaluate(data, ratios=(0.6, 0.7, 0.8, 0.9, 1.0), n_unknown=5, seed=0):
     for q in ratios:
         acc = r <= q
         print(f"  {q:5.1f}   {(acc & ok)[~unk].mean():24.1%}   {(acc & ~ok)[~unk].mean():22.1%}   {acc[unk].mean():17.1%}")
+    return top1 / n_closed
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.." && mkdir -p data/grid && cd data/grid
 if [ -n "$1" ]; then
   [ -f "$1.done" ] && exit 0
   curl -sSfL -C - -o "$1.zip" "https://zenodo.org/records/3625687/files/$1.zip?download=1"
-  unzip -qo "$1.zip" && rm "$1.zip" && touch "$1.done" && echo "done $1"
+  unzip -qo "$1.zip" -x "__MACOSX/*" && rm "$1.zip" && touch "$1.done" && echo "done $1"
   exit 0
 fi
 printf '%s\n' alignments s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 s19 s20 \
