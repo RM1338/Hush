@@ -5,3 +5,4 @@ data/
 build/
 local.properties
 __pycache__/
+.venv/
