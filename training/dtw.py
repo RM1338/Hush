@@ -33,11 +33,11 @@ def features(d):
 
 def dtw_batch(a_list, b_list):
     """DTW cost for every pair (a_i, b_j), normalised by path length bound. Returns (len(a), len(b))."""
-    A, B = pad(a_list), pad(b_list)  # (Na, Ta, F), (Nb, Tb, F)
+    A, B = pad(a_list).astype(np.float64), pad(b_list).astype(np.float64)  # float64: the dot-product form loses ~1e-4 in float32
     la, lb = [len(a) for a in a_list], [len(b) for b in b_list]
     sq = (A ** 2).sum(-1)[:, None, :, None] + (B ** 2).sum(-1)[None, :, None, :]
     cost = np.sqrt(np.maximum(sq - 2 * np.einsum("itf,jsf->ijts", A, B), 0))  # (Na, Nb, Ta, Tb) frame distances
-    D = np.full(cost.shape, np.inf, dtype=np.float32)
+    D = np.full(cost.shape, np.inf)
     Ta, Tb = cost.shape[2:]
     for i in range(Ta):
         for j in range(Tb):

@@ -19,7 +19,7 @@ Hush is an offline, on-device lip-reading Android app (mouth a taught phrase →
 
 ## Architecture invariants (span multiple docs)
 
-- **Input is landmarks, not pixels:** 40 MediaPipe Face Landmarker lip points per frame, centred on the mouth, scaled by mouth width, with head tilt removed. The *same* pinned `face_landmarker.task` (D-39) and the *same* normalisation must be used in Python training (`training/extract.py`) and in Kotlin on the phone, or the model's inputs won't match. `training/golden_lips.json` (raw MediaPipe lip xy + image size in, expected dots out) must be reproduced by a Kotlin unit test. Dots are `(frames, 40, 2)` float32 with NaN rows where no face was found; left/right mouth corners always land on (∓0.5, 0).
+- **Input is landmarks, not pixels:** 40 MediaPipe Face Landmarker lip points per frame, centred on the mouth, scaled by mouth width, with head tilt removed. The *same* pinned model, `app/src/main/assets/face_landmarker.task` (D-39, one tracked copy read by both), and the *same* normalisation must be used in Python training (`training/extract.py`) and in Kotlin on the phone, or the model's inputs won't match. `training/golden_lips.json` (raw MediaPipe lip xy + image size in, expected dots out) must be reproduced by a Kotlin unit test. Dots are `(frames, 40, 2)` float32 with NaN rows where no face was found; left/right mouth corners always land on (∓0.5, 0).
 - **Lip encoder:** a Keras 1D temporal CNN (~350k params) that outputs a 64-d fingerprint, exported as an int8 LiteRT `.tflite` under 1 MB. Training uses **TensorFlow/Keras on CPU**; PyTorch and litert-torch were rejected (D-31). No GRU/LSTM layers, because their int8 quantization is unreliable.
 - **Personalisation never trains on the device.** To teach a phrase, the user mouths it 5–10 times and the cleaned dot sequences (not fingerprints, D-37) are saved to one JSON file in app-private storage (no DB). Fingerprints are recomputed on app start, so swapping the model never forces re-teaching. Matching is nearest-template (DTW now, encoder later). "None of these" = the best phrase isn't clearly ahead of the runner-up (best ÷ second-best distance > a user-tunable ratio, D-46); a plain distance threshold did much worse.
 - **DTW baseline comes first** (D-14). The neural encoder has to beat its accuracy to replace it.
@@ -46,7 +46,6 @@ Data is all git-ignored, and every download goes into its own folder here. Nothi
 
 ```
 data/
-├── models/face_landmarker.task   # pinned MediaPipe model (URL + sha256 in ARCHITECTURE.md)
 ├── grid/                         # training/fetch_grid.sh (resumable): s1…s34 videos + alignments/
 ├── miracl/                       # Kaggle apoorvwatsky/miraclvc1: dataset/<F01..M08>/{words,phrases}/<01-10>/<rep 01-10>/color_NNN.jpg (+ depth_NNN.png), cropped/
 ├── own/<person>/                 # phone videos per training/RECORDING.md (deleted after dots extracted)

@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-MODEL = Path(__file__).resolve().parent.parent / "data/models/face_landmarker.task"  # pinned, D-39
+MODEL = Path(__file__).resolve().parent.parent / "app/src/main/assets/face_landmarker.task"  # same file the app uses, D-39
 VIDEO_EXTS = {".mp4", ".mpg", ".mov", ".avi", ".webm", ".3gp"}
 FRAME_FPS = 15  # ponytail: frame folders carry no fps; MIRACL is 15. Only used for tracking timestamps
 

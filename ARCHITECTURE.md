@@ -91,7 +91,7 @@ Speed rules: camera, MediaPipe and TTS start when the app opens (no cold start o
 
 **Target device:** Android 7+, 2 GB RAM, any front camera. Lip model under 1 MB (doc target was 10 MB).
 
-**Face model (pinned, D-39):** `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, sha256 `64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff`. Training reads it from `data/models/`; the app bundles the same file.
+**Face model (pinned, D-39):** `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, sha256 `64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff`. One copy, tracked in git at `app/src/main/assets/face_landmarker.task`: the app bundles it and `training/extract.py` reads it from there.
 
 ## 4. Datasets
 
