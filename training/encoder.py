@@ -3,6 +3,7 @@
 Trained only on GRID words, tested on MIRACL with the exact dtw.py protocol, so the numbers compare directly.
 
   python training/encoder.py train    # GRID words -> data/models/encoder.keras (+ MIRACL score)
+  python training/encoder.py train 0  # GRID + MIRACL phrases of 10 speakers; scored on the other 5 (fold 0, 1 or 2)
   python training/encoder.py eval     # MIRACL teach/test with fingerprints (float model)
   python training/encoder.py export   # int8 -> app/src/main/assets/lip_encoder.tflite (+ MIRACL score of the int8 model)
 """
@@ -108,16 +109,36 @@ def embed(encoder_fn, clips):
     return encoder_fn(np.stack([resample(c) for c in clips]))
 
 
-def miracl_score(encoder_fn):
+def miracl_split(fold):
+    """Fold 0-2: every 3rd MIRACL speaker is held out for testing, the other 10 can be trained on."""
+    spk = sorted(p.name for p in MIRACL_DOTS.iterdir())
+    test = set(spk[fold::3])
+    return set(spk) - test, test
+
+
+def miracl_score(encoder_fn, speakers=None):
     data, _ = load(MIRACL_DOTS)
+    data = {s: v for s, v in data.items() if speakers is None or s in speakers}
     return evaluate(data, dist_fn=lambda a, b: 1 - embed(encoder_fn, a) @ embed(encoder_fn, b).T)
 
 
-def train(epochs=40, batch=256, seed=0):
+def train(epochs=40, batch=256, seed=0, fold=None):
     import keras
     import tensorflow as tf
 
     clips, words, speakers = grid_words()
+    test_speakers = None
+    if fold is not None:
+        # MIRACL phrases are much closer to Hush's than GRID's single words; repeat them so 2k clips aren't drowned by 80k.
+        train_speakers, test_speakers = miracl_split(fold)
+        data, _ = load(MIRACL_DOTS)
+        for s in sorted(train_speakers):
+            for item, takes in data[s].items():
+                for x in takes.values():
+                    clips += [x] * 5
+                    words += [f"miracl/{item}"] * 5
+                    speakers += [s] * 5
+        print(f"fold {fold}: MIRACL train speakers {sorted(train_speakers)}, test speakers {sorted(test_speakers)}")
     vocab = sorted(set(words))
     y = np.array([vocab.index(w) for w in words])
     val = np.array([s in VAL_SPEAKERS for s in speakers])
@@ -140,10 +161,16 @@ def train(epochs=40, batch=256, seed=0):
     model.compile(keras.optimizers.Adam(keras.optimizers.schedules.CosineDecay(2e-3, epochs * steps)),
                   keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=["accuracy"])
     model.fit(ds, steps_per_epoch=steps, epochs=epochs, validation_data=(xv, y[va_idx]), verbose=2)
-    MODEL.parent.mkdir(parents=True, exist_ok=True)
-    encoder.save(MODEL)
-    print(f"saved {MODEL}")
-    miracl_score(lambda x: encoder.predict(x, batch_size=512, verbose=0))
+    out = MODEL if fold is None else MODEL.with_name(f"encoder_fold{fold}.keras")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    encoder.save(out)
+    print(f"saved {out}")
+    print("encoder on held-out MIRACL speakers:" if fold is not None else "encoder on MIRACL:")
+    miracl_score(lambda x: encoder.predict(x, batch_size=512, verbose=0), test_speakers)
+    if fold is not None:
+        print("DTW on the same speakers:")
+        data, _ = load(MIRACL_DOTS)
+        evaluate({s: v for s, v in data.items() if s in test_speakers})
 
 
 def export():
@@ -181,7 +208,7 @@ def export():
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "train":
-        train()
+        train(fold=int(sys.argv[2]) if len(sys.argv) > 2 else None)
     elif cmd == "eval":
         import keras
         enc = keras.models.load_model(MODEL)
