@@ -19,3 +19,32 @@ Solo developer (D-36), so phases run one after another.
 **Cut first if late:** Ask AI → nod-to-confirm (tap still works) → neural encoder (ship with DTW).
 
 **Risks to watch:** no 2 GB test phone (only mid-range) — latency on the target device is estimated, so try to borrow a cheap phone before Phase 5. Disk is no longer tight (78 GB free on Oct 3).
+
+## Where things stand (2026-10-04)
+
+| Phase | State |
+|---|---|
+| 0 Setup | ✅ Done |
+| 1 Lip dots + golden file | ✅ Done |
+| 2 DTW baseline + test method | ✅ Done, then improved: mean of 2 nearest takes (D-47), movement only (D-49). MIRACL top-1 81.8 %, live phone clips 65 % first guess / 100 % in top 3 |
+| 3 Phone app end to end | ✅ Runs on a Galaxy M35: teach, match, Confirm / "Did you mean…", instant speak/timer, SMS, call, alarm, record mode, decluttered UI (D-51). Learns from confirmed attempts (D-48) |
+| 4 Neural encoder | 🟡 **Half done.** Trained and scored, not shipped (D-50) |
+| 5 Own data + tuning | ⬜ Not started (only one person, mostly one session) |
+| 6 Demo prep | ⬜ Not started |
+
+### Half done (pick up here)
+
+- **Encoder (Phase 4).** `training/encoder.py` trains on all 33 GRID speakers (400 of 1000 sentences each) + MIRACL phrases; only **fold 0** of 3 has been run. It ties DTW on unseen MIRACL speakers (79.0 vs 79.3 %) and DTW + encoder reaches 84.4 %, but on live phone clips it loses (55 vs 65 %). Not done yet: folds 1–2, the int8 `export` step (written, never run), Kotlin inference with LiteRT, and a retry once there is multi-session own data. Model files are in git-ignored `data/models/`.
+- **Sensitivity setting is not saved.** The Settings slider (D-46 ratio) resets to 0.8 when the app restarts.
+- **Learned takes push out taught ones.** A phrase keeps its 15 most recent takes (D-48), so after many confirmations the original taught takes drop out. Fine so far; watch for drift.
+- **Record mode** works (`.npy` files, `adb pull`), but no recordings from other testers yet; `training/RECORDING.md` (with the consent note) hasn't been run with anyone.
+- **Release build.** R8 is switched on but a release APK has never been built or tested; no baseline profile yet (D-28). The debug APK is 65 MB because MediaPipe ships every CPU type; add `abiFilters` for release.
+- **Low-end speed.** Measured on a mid-range phone only (~31 ms/frame, camera-limited to ~14 fps indoors); the 320×240 / 2 GB-phone measurement and the latency table are still open.
+
+### Not started
+
+- **Cross-app actions** (asked for): e.g. "call Mum on WhatsApp", WhatsApp messages. Plan: WhatsApp voice-call/chat rows from the phone's contacts (needs `READ_CONTACTS`), with the same Yes/No confirm as calls.
+- **Look-alike warning in Teach**: warn when a new phrase's takes are too close to an existing phrase ("Thanks" / "Thank You", "I'm cold" / "I'm cool" are the main live errors).
+- **Phase 5**: 5+ testers × 2 sessions with consent, tune the ratio, nod-to-confirm, latency on a cheap phone.
+- **Phase 6**: README, demo script, optional Ask AI.
+- **Before any store release**: `SEND_SMS` is restricted on Play (D-23); MIRACL is research-only (D-13), so a shipped model must be trained on GRID + own data only.
