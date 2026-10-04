@@ -24,7 +24,10 @@ sealed interface Screen {
     data class Confirm(val phrase: Phrase, val others: List<Phrase>, val clip: Clip, val sure: Boolean) : Screen
     data class Instant(val phrase: Phrase) : Screen
     data object Phrases : Screen
-    data object Teach : Screen
+    data class PhraseDetail(val id: String) : Screen
+    /** New phrase when [id] is null; otherwise record more takes for that phrase (e.g. in another session). */
+    data class Teach(val id: String? = null) : Screen
+    data object Settings : Screen
     data object Record : Screen
 }
 
@@ -33,7 +36,6 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
     var screen by mutableStateOf<Screen>(Screen.Home)
     val phrases = mutableStateListOf<Phrase>().apply { addAll(store.load()) }
     var faceVisible by mutableStateOf(false)
-    var fps by mutableStateOf(0f)
 
     /** D-46: accept the best guess only if best ÷ second-best ≤ ratio. Lower = stricter. */
     var ratio by mutableStateOf(0.8f)
@@ -90,6 +92,19 @@ class HushState(private val store: PhraseStore, val recordingsDir: File) {
         store.save(phrases)
     }
 
+    fun addTakes(id: String, takes: List<Clip>) {
+        val p = phrases.firstOrNull { it.id == id } ?: return
+        save(p.copy(takes = (p.takes + takes).takeLast(MAX_TAKES)))
+    }
+
+    /** System back: sub-pages of Phrases go back to Phrases, everything else to Home. */
+    fun back() {
+        screen = when (screen) {
+            is Screen.PhraseDetail, is Screen.Teach, Screen.Settings -> Screen.Phrases
+            else -> Screen.Home
+        }
+    }
+
     fun delete(p: Phrase) {
         phrases.remove(p)
         store.save(phrases)
@@ -121,7 +136,6 @@ class MainActivity : ComponentActivity() {
         previewView = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
         tracker = LipTracker(this) { dots ->
             state.onFrame(dots)
-            state.fps = tracker.fps
         }
         // Camera, MediaPipe and TTS all start now, not on first button press (D-21).
         val needed = arrayOf(Manifest.permission.CAMERA, Manifest.permission.SEND_SMS, Manifest.permission.CALL_PHONE)
@@ -130,7 +144,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             HushTheme {
-                BackHandler(state.screen != Screen.Home) { state.screen = Screen.Home }
+                BackHandler(state.screen != Screen.Home) { state.back() }
                 HushApp(state, previewView, actions)
             }
         }
