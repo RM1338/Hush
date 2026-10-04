@@ -18,7 +18,7 @@ Same diagram as Mermaid (renders on GitHub, lives with the code):
 flowchart TB
     subgraph LAPTOP["① BUILD ONCE — on a laptop, inside Docker"]
         direction LR
-        D["Public lip datasets<br/>GRID · LRW · OuluVS2 · MIRACL-VC1<br/>+ our own phone recordings"]
+        D["Public lip datasets<br/>GRID · MIRACL-VC1<br/>+ our own phone recordings"]
         X["MediaPipe<br/>video → 40 lip dots per frame"]
         T["Train tiny lip encoder<br/>TensorFlow/Keras, CPU only"]
         E["Export to LiteRT<br/>int8, under 1 MB"]
@@ -30,18 +30,18 @@ flowchart TB
         C["Front camera<br/>CameraX, 640×480"]
         F["MediaPipe Face Landmarker<br/>keep 40 lip dots, straighten head tilt"]
         M["Lip encoder<br/>dots over time → fingerprint"]
-        N{"Closest taught phrase?<br/>too far = 'none'"}
+        N{"Closest taught phrase?<br/>not clearly ahead of the runner-up = 'none'"}
         R["Intent router<br/>phrase → action"]
         K{"You confirm?<br/>tap or nod<br/>(skipped for speak-aloud & timers)"}
         A["Android does it<br/>SMS · call · alarm · speak aloud"]
         C --> F --> M --> N --> R --> K --> A
     end
 
-    S["Setup / teach a phrase<br/>mouth it 5–10 times,<br/>fingerprints saved on phone"]
+    S["Setup / teach a phrase<br/>mouth it 5–10 times,<br/>lip-dot clips saved on phone"]
     AI["Optional: Ask AI<br/>text only, opt-in, needs internet"]
 
     E -- "bundled in the app" --> M
-    S -. "saved fingerprints" .-> N
+    S -. "taught clips" .-> N
     R -. "only for 'Ask AI' phrases" .-> AI
 ```
 
@@ -54,12 +54,12 @@ Read it top to bottom: **① is done once by us** (training). **② is what happ
 | 1. Hold button | Push-to-talk starts the camera | Phone | — |
 | 2. Face dots | MediaPipe puts 478 points on the face; we keep the 40 lip points, centre them on the mouth, scale by mouth width, undo head tilt | Phone | ~15–30 fps, the heaviest step |
 | 3. Fingerprint | Tiny 1D-CNN reads the dot movement (up to 2 s) and outputs 64 numbers | Phone | ~5 ms, under 1 MB |
-| 4. Match | Compare to the fingerprints saved during setup. Nearest wins; if nothing is close enough → "none of these" (ignores chewing/smiling) | Phone | microseconds |
+| 4. Match | Compare to the fingerprints saved during setup. Nearest wins, but only if it is clearly closer than the second-best phrase (best ÷ second ≤ ratio, user-tunable, D-46); otherwise "none of these" (ignores chewing/smiling) | Phone | microseconds |
 | 5. Route | `phrases.json` says what each phrase does ("call Dad" → dial contact Dad) | Phone | — |
 | 6. Confirm | Messages, calls, Emergency: shows "Call Dad?", tap or nod (nod comes from the same face dots, free). **Speak-aloud and timers skip this** and show "tap to stop/undo" instead | Phone | — |
 | 7. Act | Android intents: SMS, dial, alarm, TextToSpeech | Phone | — |
 
-**Teaching a new phrase = mouthing it 5–10 times.** No retraining: the app just saves those fingerprints. That's why it works offline and on weak phones.
+**Teaching a new phrase = mouthing it 5–10 times.** No retraining: the app saves those mouthings as cleaned lip-dot sequences and turns them into fingerprints when it starts, so a model update never forces re-teaching (D-37). That's why it works offline and on weak phones.
 
 ### Latency budget (from letting go of the button)
 
@@ -85,11 +85,13 @@ Speed rules: camera, MediaPipe and TTS start when the app opens (no cold start o
 | Personalisation | **Nearest-fingerprint matching** (prototypes) | Teaching = storing vectors, not training. Zero extra battery, instant |
 | Agent / actions | **Deterministic router** (`phrases.json`) + **Android intents** | Closed phrase set → the phrase *is* the intent. No LLM needed for the core |
 | Speak aloud | **Android TextToSpeech** | Built in, offline voices |
-| Storage | One JSON file in app-private storage | A few KB of vectors. No database needed |
+| Storage | One JSON file in app-private storage | Taught dot sequences, ~4 MB for 30 phrases (D-37). No database needed |
 | Ask AI (optional) | Cloud LLM, **text only**, opt-in | The only thing that touches the internet |
 | Build | **Docker** (one `Dockerfile`, targets `train` and `android`) | Anyone can train and build the APK with no local setup |
 
 **Target device:** Android 7+, 2 GB RAM, any front camera. Lip model under 1 MB (doc target was 10 MB).
+
+**Face model (pinned, D-39):** `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, sha256 `64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff`. One copy, tracked in git at `app/src/main/assets/face_landmarker.task`: the app bundles it and `training/extract.py` reads it from there.
 
 ## 4. Datasets
 
@@ -97,18 +99,16 @@ The model learns *"how lips move"* from public data, then learns *your* phrases 
 
 | Dataset | What's in it | Licence | Our use | Priority |
 |---|---|---|---|---|
-| **[GRID](https://zenodo.org/records/3625687)** | 34 speakers × 1000 sentences, frontal, fixed grammar | CC BY 4.0 per Zenodo (confirm on the page) | **Start here.** Instant download, no agreement, even commercial-friendly | Week 1 |
-| **[LRW](https://www.robots.ox.ac.uk/~vgg/data/lip_reading/lrw1.html)** | 500 words, ~1000 clips each, hundreds of BBC speakers | Research only, BBC agreement | **Main pretraining** — variety of faces, angles, lighting | Apply **today** (approval can take days) |
-| **OuluVS2** | 52 speakers, 10 everyday phrases ("thank you", "excuse me"…) + digits, 5 camera angles | Research, request form | Phrase-level fine-tune + test side angles | Week 2 |
-| **MIRACL-VC1** | 15 speakers, 10 words + 10 phrases, 10 reps each | Research (on Kaggle) | Matches our setup exactly (few reps per phrase) → few-shot test | Week 1 |
-| **Hush own recordings** | 30 command phrases × 5+ testers, on real phones, handheld, varied light | Ours | **Most important** — it's the real conditions. Also the only path to a commercial launch | Week 2–3 |
+| **[GRID](https://zenodo.org/records/3625687)** | 33 speakers (s21 missing) × 1000 sentences, frontal, fixed grammar. Video + word alignments only, no audio (D-42) | CC BY 4.0 (confirmed on Zenodo) | **Start here and main pretraining** (D-40). Instant download, no agreement, even commercial-friendly | Week 1 |
+| **MIRACL-VC1** | 15 speakers, 10 words + 10 phrases, 10 reps each | Research (Kaggle [`apoorvwatsky/miraclvc1`](https://www.kaggle.com/datasets/apoorvwatsky/miraclvc1), 6.3 GB, licence listed as unknown) | Matches our setup exactly (few reps per phrase) → few-shot test | Week 1 |
+| **Hush own recordings** | 30 phrases + junk clips × 5+ people, on real phones, handheld, varied light ([training/RECORDING.md](training/RECORDING.md)) | Ours, with written consent (D-43) | **Most important** — it's the real conditions. Also the only path to a commercial launch | Week 1 onwards |
 | LRS3 (TED) | 400+ h free sentences | CC BY-NC-ND | Only if sentence mode is ever built | Later |
 
-**Not using:** LRS2 (same BBC agreement, overlaps LRW), VoxCeleb2 (unlabelled — self-supervised pretraining is overkill for 30 phrases), AVSpeech (no transcripts).
+**Not using:** OuluVS2 (research request form, likely the same signature problem; MIRACL + own data cover phrases, handheld recordings cover angles, D-41), [LRW](https://www.robots.ox.ac.uk/~vgg/data/lip_reading/lrw1.html) and LRS2 (BBC agreement needs a staff signature at a research institution; not available for a school project, D-40), VoxCeleb2 (unlabelled — self-supervised pretraining is overkill for 30 phrases), AVSpeech (no transcripts).
 
-**Training recipe (short):** run MediaPipe over every clip once and cache the dots (`.npy`) → train the encoder to classify LRW/GRID words → fine-tune so the same phrase from the same person lands close together (prototypical episodes on OuluVS2/MIRACL/own data) → int8 export. Augment with speed changes (15–30 fps phones), small rotations and dropped frames.
+**Training recipe (short):** run MediaPipe over every clip once and cache the dots (`.npy`) → train the encoder to classify GRID words → fine-tune so the same phrase from the same person lands close together (prototypical episodes on MIRACL/own data) → int8 export. Augment with speed changes (15–30 fps phones), small rotations and dropped frames.
 
-Rough cost: extracting dots from LRW ≈ 14M frames ≈ 5 h on 12 CPU cores. Training the encoder: minutes to an hour on CPU.
+Rough cost: extracting dots from GRID ≈ 2.5M frames ≈ 1 h on 12 CPU cores. Training the encoder: minutes to an hour on CPU.
 
 ## 5. Why this architecture
 
@@ -125,7 +125,7 @@ Rough cost: extracting dots from LRW ≈ 14M frames ≈ 5 h on 12 CPU cores. Tra
 | **Closed set can't do free questions.** Doc demo "What is photosynthesis?" won't work as free speech | The "Ask AI" feature is limited to questions you've taught as phrases | For the demo, teach that question as a phrase and say so. Free sentences = later, opt-in, server-side |
 | **Dots lose info** (tongue, teeth visibility) that pixels have | Lower ceiling than pixel models on large vocabularies | Irrelevant for 30–50 personal phrases; revisit only if accuracy stalls below 90% |
 | **MediaPipe is the bottleneck on very weak phones** (~10–15 fps) | Fewer frames per phrase | Train with frame-rate augmentation; lower camera resolution; tune the "none" threshold in settings |
-| **LRW agreement may arrive late** for a 31-Oct deadline | Less pretraining variety | GRID + MIRACL + own data first; LRW is an upgrade, not a blocker |
+| **No LRW** (D-40): GRID is the only large pretraining set, and it has 33 speakers, frontal only | Less variety of faces, angles and lighting than LRW's hundreds of speakers | Own recordings cover real conditions; strong augmentation (rotation, speed, dropped frames); if the encoder still can't beat DTW, ship DTW |
 | **Contacts are bound at teaching time** ("call Dad" is one phrase) | Can't say "call <anyone>" | Fine for v1; a contact-name slot is a v2 problem |
 | **Dataset licences are research-only** (except GRID & own data) | Can't ship commercially as-is | Own recordings + GRID are the commercial path |
 | **No confirm for speak-aloud & timers** | A misread phrase can be spoken aloud wrong; the spec's "zero wrong actions" target now applies only to messages, calls and Emergency | One tap stops speech / cancels the timer; nothing irreversible (send, call) ever skips confirm |
@@ -145,7 +145,7 @@ Rough cost: extracting dots from LRW ≈ 14M frames ≈ 5 h on 12 CPU cores. Tra
 | **PyTorch + litert-torch** | Converter pulls in JAX + TensorFlow anyway: first Docker image was 3.8 GB for a <1 MB model. Keras exports to LiteRT natively |
 | **ONNX Runtime Mobile** | Works, but LiteRT is smaller on Android and shares Google's tooling with MediaPipe |
 | **Eyebrow-raise trigger** | Cute but error-prone. Push-to-talk first; add later if users ask |
-| **A database (Room/SQLite)** | We store a few KB of vectors. One JSON file |
+| **A database (Room/SQLite)** | We store a few MB of dot sequences. One JSON file |
 
 ## 8. Planned project layout
 
